@@ -1,0 +1,126 @@
+/*
+ * keyinit.c
+ *
+ *  Created on: 2017年11月22日
+ *      Author: A1957
+ */
+#include <stdint.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdarg.h>
+#include <string.h>
+
+#include "inc/hw_memmap.h"
+#include "inc/hw_types.h"
+#include "inc/hw_timer.h"
+#include "inc/hw_ints.h"
+#include "inc/hw_gpio.h"
+#include "inc/hw_i2c.h"
+#include "inc/hw_sysctl.h"
+#include "driverlib/timer.h"
+#include "driverlib/interrupt.h"
+#include "driverlib/sysctl.h"
+#include "driverlib/systick.h"
+#include "driverlib/gpio.h"
+#include "driverlib/pin_map.h"
+#include "driverlib/ssi.h"
+#include "driverlib/i2c.h"
+#include "driverlib/udma.h"
+#include "driverlib/fpu.h"
+#include "driverlib/rom.h"
+//#include <math.h>
+#include <stdlib.h>
+#include "menu.h"
+#include "driverlib/pin_map.h"
+#include "uc1701.h"
+#include "screen.h"
+//*****************************************************************************
+#ifdef DEBUG
+void__error__(char *pcFilename, unsigned long ulLine)
+{
+}
+#endif
+//*****************************************************************************
+//
+// Global variables
+//
+//*****************************************************************************
+uint16_t screen_line=1,screen_row=1;
+//*****************************************************************************
+//
+// The interrupt application.
+// key检测触发
+//
+//*****************************************************************************
+void Key1IntHandler()//up
+    {
+        GPIOIntClear(GPIO_PORTD_BASE,GPIO_INT_PIN_7);
+
+    }
+void Key2IntHandler()//enter
+    {
+         GPIOIntClear(GPIO_PORTF_BASE,GPIO_INT_PIN_4);
+
+         GPIOIntDisable(GPIO_PORTD_BASE,GPIO_PIN_7);//禁用上翻和下翻
+         GPIOIntDisable(GPIO_PORTA_BASE,GPIO_PIN_3);
+
+         GPIOIntDisable(GPIO_PORTF_BASE,GPIO_PIN_4);//禁用进入
+
+         GPIOIntEnable(GPIO_PORTA_BASE,GPIO_PIN_2);//使能退出键
+
+    }
+void Key34IntHandler()
+  {
+              GPIOIntClear(GPIO_PORTA_BASE,GPIO_INT_PIN_3);
+
+          //if(GPIOIntStatus(GPIO_PORTA_BASE, 0) & GPIO_INT_PIN_2)//back
+
+              GPIOIntClear(GPIO_PORTA_BASE,GPIO_INT_PIN_2);
+
+              GPIOIntEnable(GPIO_PORTD_BASE,GPIO_PIN_7);
+              GPIOIntEnable(GPIO_PORTA_BASE,GPIO_PIN_3);
+
+              GPIOIntEnable(GPIO_PORTF_BASE,GPIO_PIN_4);//使能进入键
+
+              GPIOIntDisable(GPIO_PORTA_BASE,GPIO_PIN_2);
+          }
+          //SysCtlDelay(SysCtlClockGet() /50);
+  }
+
+void key()
+{
+
+    SysCtlClockSet(SYSCTL_SYSDIV_4 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN |SYSCTL_XTAL_16MHZ);
+    //
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);//外设使能
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOD);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);
+    //
+    HWREG(GPIO_PORTD_BASE + GPIO_O_LOCK) = GPIO_LOCK_KEY;//PD7解锁
+    HWREG(GPIO_PORTD_BASE + GPIO_O_CR) |= 0x80;//确认
+    HWREG(GPIO_PORTD_BASE + GPIO_O_LOCK) = 0;//重新锁定
+
+    GPIOPinTypeGPIOInput(GPIO_PORTD_BASE, GPIO_PIN_7);  //K1，
+    GPIOPinTypeGPIOInput(GPIO_PORTF_BASE, GPIO_PIN_4);  //K2，
+    GPIOPinTypeGPIOInput(GPIO_PORTA_BASE, GPIO_PIN_3|GPIO_PIN_2); //K3K4
+
+    GPIOIntTypeSet(GPIO_PORTD_BASE,GPIO_PIN_7,GPIO_FALLING_EDGE);//设置PD7中断类型
+    GPIOIntTypeSet(GPIO_PORTF_BASE,GPIO_PIN_4,GPIO_FALLING_EDGE);//设置PF4中断类型
+    GPIOIntTypeSet(GPIO_PORTA_BASE,GPIO_PIN_3|GPIO_PIN_2,GPIO_FALLING_EDGE);//设置PA2,3中断类型
+
+    GPIOIntEnable(GPIO_PORTD_BASE,GPIO_PIN_7);                  //使能PD7中断
+    GPIOIntEnable(GPIO_PORTF_BASE,GPIO_PIN_4);                  //使能PF4中断
+    GPIOIntEnable(GPIO_PORTA_BASE,GPIO_PIN_3|GPIO_PIN_2);       //使能PA2,3中断
+
+    GPIOIntRegister(GPIO_PORTD_BASE, Key1IntHandler);     //为PD7注册一个中断处理句柄
+    GPIOIntRegister(GPIO_PORTF_BASE, Key2IntHandler);     //为PF4注册一个中断处理句柄
+    GPIOIntRegister(GPIO_PORTA_BASE, Key34IntHandler);    //为PA2,3注册一个中断处理句柄
+    GPIOIntDisable(GPIO_PORTA_BASE,GPIO_PIN_2);       //使能PA2,3中断
+    UC1701Init(1000000);
+
+    //UC1701Clear();
+    screen_menu(1);
+    highlight(1,1,100);
+}
+
+
